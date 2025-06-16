@@ -18,17 +18,7 @@ def compute_histogram(img_array, mode="rgb"):
             hist[pixel] += 1
         return hist
     else:  # Imagen a color (RGB)
-        if mode == "luminance":
-            # Convertir a luminancia (Y = 0.299R + 0.587G + 0.114B)
-            luminance = (0.299 * img_array[:, :, 0] +
-                         0.587 * img_array[:, :, 1] +
-                         0.114 * img_array[:, :, 2]).astype(np.uint8)
-            hist = np.zeros(256, dtype=int)
-            for pixel in luminance.flatten():
-                hist[pixel] += 1
-            return hist
-        else:  # Modo RGB
-            return [np.histogram(img_array[:, :, i], bins=256, range=(0, 255))[0] for i in range(3)]
+        return [np.histogram(img_array[:, :, i], bins=256, range=(0, 255))[0] for i in range(3)]
 
 def expand_histogram_custom(img_array, new_min=0, new_max=255):
     if len(img_array.shape) == 2:  # Escala de grises
@@ -46,7 +36,7 @@ def expand_histogram_custom(img_array, new_min=0, new_max=255):
             else:
                 expanded[:, :, i] = ((img_array[:, :, i] - L) / (H - L)) * (new_max - new_min) + new_min
         return np.clip(expanded, new_min, new_max).astype(np.uint8)
-
+    
 def equalize_histogram_custom(img_array, clip_limit=0.03):
     if len(img_array.shape) == 2:  
         hist = np.histogram(img_array, bins=256, range=(0, 255))[0]

@@ -3,7 +3,7 @@ import numpy as np
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget,
     QPushButton, QLabel, QFileDialog, QHBoxLayout,
-    QComboBox, QSlider, QFormLayout, QMessageBox
+    QSlider, QFormLayout, QMessageBox, QGridLayout
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QImage
@@ -15,128 +15,139 @@ from PIL import Image
 class ImageApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setup_ui()
-        self.setup_connections()
-        self.initialize_variables()
-
-    def setup_ui(self):
         self.setWindowTitle("Procesador de Histogramas Avanzado")
         self.setGeometry(100, 100, 1200, 800)
-        
-        # Widget principal
+        self.initialize_variables()
+        self.setup_ui()
+        self.setup_connections()
+
+    def setup_ui(self):
+        # Main widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        
+
         # Controles superiores
         self.setup_top_controls(main_layout)
-        
+
         # Ajustes del histograma
         self.setup_histogram_settings(main_layout)
-        
+
         # Área de visualización
-        self.setup_display_area(main_layout)
+        self.display_widget = QWidget()
+        self.display_layout = QGridLayout(self.display_widget)
+        main_layout.addWidget(self.display_widget, stretch=1)
+
+        # Initialize display area
+        self.setup_display_area()
 
     def setup_top_controls(self, main_layout):
         controls_layout = QHBoxLayout()
-        
+
         self.btn_load = QPushButton("Cargar Imagen")
         self.btn_load.setStyleSheet("background-color: #4CAF50; color: white;")
-        
+
         self.btn_save = QPushButton("Guardar Imagen Procesada")
         self.btn_save.setStyleSheet("background-color: #FF9800; color: white;")
-        
+
         self.btn_reset = QPushButton("Resetear Valores")
         self.btn_reset.setStyleSheet("background-color: #f44336; color: white;")
-        
+
         self.btn_compare = QPushButton("Comparar Lado a Lado")
-        
+
         controls_layout.addWidget(self.btn_load)
         controls_layout.addWidget(self.btn_save)
         controls_layout.addWidget(self.btn_reset)
         controls_layout.addWidget(self.btn_compare)
         controls_layout.addStretch()
-        
+
         main_layout.addLayout(controls_layout)
 
     def setup_histogram_settings(self, main_layout):
         settings_layout = QFormLayout()
-        
+
         # Controles para expansión
         self.min_slider = QSlider(Qt.Orientation.Horizontal)
         self.min_slider.setRange(0, 254)
         self.min_slider.setValue(0)
         self.min_slider.setTickInterval(10)
         self.min_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        
+
         self.max_slider = QSlider(Qt.Orientation.Horizontal)
         self.max_slider.setRange(1, 255)
         self.max_slider.setValue(255)
         self.max_slider.setTickInterval(10)
         self.max_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        
+
         # Controles para ecualización
         self.clip_limit_slider = QSlider(Qt.Orientation.Horizontal)
-        self.clip_limit_slider.setRange(0, 50)  # 0-10%, con granularidad fina
-        self.clip_limit_slider.setValue(0)  # 0.03 (3%)
+        self.clip_limit_slider.setRange(0, 50)
+        self.clip_limit_slider.setValue(0)
         self.clip_limit_slider.setTickInterval(1)
         self.clip_limit_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        
-        # Combobox para modo de histograma
-        self.hist_mode = QComboBox()
-        self.hist_mode.addItems(["Canales RGB", "Luminancia"])
-        
-        # Organización
-        settings_layout.addRow("Modo Histograma:", self.hist_mode)
+
         settings_layout.addRow("Mínimo (Expansión):", self.min_slider)
         settings_layout.addRow("Máximo (Expansión):", self.max_slider)
         settings_layout.addRow("Límite Clip (Ecualización):", self.clip_limit_slider)
-        
+
         main_layout.addLayout(settings_layout)
 
-    def setup_display_area(self, main_layout):
-        self.display_layout = QHBoxLayout()
-        
-        # Widget para imágenes
+    def setup_display_area(self):
+        # Clear existing layout
+        while self.display_layout.count():
+            item = self.display_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Create widgets
         self.image_label_original = QLabel()
         self.image_label_original.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label_original.setStyleSheet("border: 2px solid #ddd; background-color: #f5f5f5;")
-        
+
         self.image_label_processed = QLabel()
         self.image_label_processed.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label_processed.setStyleSheet("border: 2px solid #ddd; background-color: #f5f5f5;")
-        
-        # Widget para histogramas
+
         self.canvas_original = FigureCanvas(Figure(figsize=(5, 3), dpi=100))
         self.canvas_original.setStyleSheet("background-color: white;")
-        
+
         self.canvas_processed = FigureCanvas(Figure(figsize=(5, 3), dpi=100))
         self.canvas_processed.setStyleSheet("background-color: white;")
-        
-        self.display_layout.addWidget(self.image_label_original, 30)
-        self.display_layout.addWidget(self.image_label_processed, 30)
-        self.display_layout.addWidget(self.canvas_original, 20)
-        self.display_layout.addWidget(self.canvas_processed, 20)
-        
-        main_layout.addLayout(self.display_layout, stretch=1)
+
+        if self.compare_mode:
+            # Four-container layout for comparison mode (side by side)
+            self.display_layout.addWidget(QLabel("Imagen Original"), 0, 0)
+            self.display_layout.addWidget(QLabel("Histograma Original"), 0, 1)
+            self.display_layout.addWidget(QLabel("Imagen Procesada"), 0, 2)
+            self.display_layout.addWidget(QLabel("Histograma Procesado"), 0, 3)
+            self.display_layout.addWidget(self.image_label_original, 1, 0)
+            self.display_layout.addWidget(self.canvas_original, 1, 1)
+            self.display_layout.addWidget(self.image_label_processed, 1, 2)
+            self.display_layout.addWidget(self.canvas_processed, 1, 3)
+            self.display_layout.setRowStretch(1, 2)
+        else:
+            # Two-container layout for normal mode
+            self.display_layout.addWidget(QLabel("Imagen Actual"), 0, 0)
+            self.display_layout.addWidget(QLabel("Histograma Actual"), 0, 1)
+            self.display_layout.addWidget(self.image_label_original, 1, 0)
+            self.display_layout.addWidget(self.canvas_original, 1, 1)
+            self.display_layout.setRowStretch(1, 2)
 
     def setup_connections(self):
         self.btn_load.clicked.connect(self.load_image)
         self.btn_save.clicked.connect(self.save_image)
         self.btn_reset.clicked.connect(self.reset_values)
         self.btn_compare.clicked.connect(self.toggle_comparison)
-        
         self.min_slider.valueChanged.connect(self.update_custom_expansion)
         self.max_slider.valueChanged.connect(self.update_custom_expansion)
         self.clip_limit_slider.valueChanged.connect(self.update_custom_equalization)
-        self.hist_mode.currentTextChanged.connect(self.update_histogram_display)
 
     def initialize_variables(self):
         self.current_image = None
         self.original_image = None
         self.processed_image = None
         self.compare_mode = False
-        self.last_applied = None 
+        self.last_applied = None
 
     def load_image(self):
         try:
@@ -154,8 +165,9 @@ class ImageApp(QMainWindow):
                 self.last_applied = None
                 self.compare_mode = False
                 self.btn_compare.setText("Comparar Lado a Lado")
+                self.setup_display_area()
                 self.show_image(self.current_image, original=True)
-                self.plot_histogram(compute_histogram(self.current_image, self.hist_mode.currentText()), original=True)
+                self.plot_histogram(compute_histogram(self.current_image), original=True)
                 self.clear_processed_display()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al cargar imagen: {e}")
@@ -190,7 +202,7 @@ class ImageApp(QMainWindow):
             canvas.figure.clear()
             ax = canvas.figure.add_subplot(111)
             
-            if self.hist_mode.currentText() == "Luminancia" or not isinstance(histogram, list):
+            if not isinstance(histogram, list):
                 hist_data = histogram
                 color = 'gray'
                 ax.bar(range(256), hist_data, color=color, width=1.0)
@@ -212,17 +224,19 @@ class ImageApp(QMainWindow):
         self.compare_mode = not self.compare_mode
         self.btn_compare.setText("Volver a Vista Normal" if self.compare_mode else "Comparar Lado a Lado")
         
+        self.setup_display_area()
+        
         if self.compare_mode:
             self.show_image(self.original_image, original=True)
-            self.plot_histogram(compute_histogram(self.original_image, self.hist_mode.currentText()), original=True)
+            self.plot_histogram(compute_histogram(self.original_image), original=True)
             if self.processed_image is not None:
                 self.show_image(self.processed_image, original=False)
-                self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=False)
+                self.plot_histogram(compute_histogram(self.processed_image), original=False)
             else:
                 self.clear_processed_display()
         else:
             self.show_image(self.current_image, original=True)
-            self.plot_histogram(compute_histogram(self.current_image, self.hist_mode.currentText()), original=True)
+            self.plot_histogram(compute_histogram(self.current_image), original=True)
             self.clear_processed_display()
 
     def update_custom_expansion(self):
@@ -237,10 +251,10 @@ class ImageApp(QMainWindow):
             self.last_applied = "expansion"
             if self.compare_mode:
                 self.show_image(self.processed_image, original=False)
-                self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=False)
+                self.plot_histogram(compute_histogram(self.processed_image), original=False)
             else:
                 self.show_image(self.processed_image, original=True)
-                self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=True)
+                self.plot_histogram(compute_histogram(self.processed_image), original=True)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al aplicar expansión: {e}")
 
@@ -250,15 +264,15 @@ class ImageApp(QMainWindow):
         try:
             self.processed_image = equalize_histogram_custom(
                 self.current_image,
-                self.clip_limit_slider.value() / 10000.0  # Mapear 0-1000 a 0.0-0.1
+                self.clip_limit_slider.value() / 10000.0
             )
             self.last_applied = "equalization"
             if self.compare_mode:
                 self.show_image(self.processed_image, original=False)
-                self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=False)
+                self.plot_histogram(compute_histogram(self.processed_image), original=False)
             else:
                 self.show_image(self.processed_image, original=True)
-                self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=True)
+                self.plot_histogram(compute_histogram(self.processed_image), original=True)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al aplicar ecualización: {e}")
 
@@ -285,12 +299,6 @@ class ImageApp(QMainWindow):
         self.canvas_processed.figure.clear()
         self.canvas_processed.draw()
 
-    def update_histogram_display(self):
-        if self.original_image is not None:
-            self.plot_histogram(compute_histogram(self.original_image, self.hist_mode.currentText()), original=True)
-        if self.processed_image is not None and self.compare_mode:
-            self.plot_histogram(compute_histogram(self.processed_image, self.hist_mode.currentText()), original=False)
-
     def reset_values(self):
         self.min_slider.setValue(0)
         self.max_slider.setValue(255)
@@ -302,8 +310,9 @@ class ImageApp(QMainWindow):
             self.last_applied = None
             self.compare_mode = False
             self.btn_compare.setText("Comparar Lado a Lado")
+            self.setup_display_area()
             self.show_image(self.current_image, original=True)
-            self.plot_histogram(compute_histogram(self.current_image, self.hist_mode.currentText()), original=True)
+            self.plot_histogram(compute_histogram(self.current_image), original=True)
             self.clear_processed_display()
 
 if __name__ == "__main__":
